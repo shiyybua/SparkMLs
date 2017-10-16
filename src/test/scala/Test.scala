@@ -16,6 +16,7 @@ object Test{
       .appName("App")
       .getOrCreate()
 
-    println(spark.getClass.getSimpleName)
+    val data = spark.read.format("libsvm").load("data/sample_libsvm_data.txt")
+    data.show()
   }
 }
