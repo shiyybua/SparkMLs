@@ -1,4 +1,6 @@
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 
 /**
@@ -11,14 +13,9 @@ object Test{
 
     val spark = SparkSession
       .builder().master("local[*]")
-      .appName("RandomForestRegressorExample")
+      .appName("App")
       .getOrCreate()
 
-    val data = spark.read
-      .format("csv")
-      .option("header", "true") //reading the headers
-      .option("mode", "DROPMALFORMED")
-      .load("data/phone_rank.csv")
-    val Array(trainingData, testData) = data.randomSplit(Array(0.7, 0.3))
+    println(spark.getClass.getSimpleName)
   }
 }

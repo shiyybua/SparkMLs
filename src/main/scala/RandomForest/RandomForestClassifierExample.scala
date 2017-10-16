@@ -41,6 +41,7 @@ object RandomForestClassifierExample {
     // $example on$
     // Load and parse the data file, converting it to a DataFrame.
     val data = spark.read.format("libsvm").load("data/sample_libsvm_data.txt")
+
     /*
     * +-----+--------------------+
       |label|            features|
