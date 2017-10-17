@@ -1,3 +1,4 @@
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DoubleType, StructField, StructType}
@@ -6,7 +7,6 @@ import scala.collection.mutable.ListBuffer
 import org.apache.spark.ml.linalg.SQLDataTypes.VectorType
 import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.sql.functions._
-
 
 
 /**
@@ -44,12 +44,41 @@ object phoneRankProcess{
     sess.sqlContext.createDataFrame(rows, schema)
   }
 
-  def fillColumsWithAvg(df: DataFrame ,columns: Seq[String], tableName: String): DataFrame ={
-    df
+  def fillColumnsWithAvg(sess: SparkSession, df: DataFrame ,columns: Seq[String], tableName: String): DataFrame ={
+    // update某列 ： val updatedDf = newDf.withColumn("c", regexp_replace(col("c"), "null", avg.toString))
+    var valueMap = scala.Predef.Map[String, Any]()
+    for(column <- columns){
+      val avg = sess.sql(s"select avg($column) from $tableName where $column is not null").first().get(0)
+      valueMap += (column -> avg)
+    }
+    df.na.fill(valueMap)
   }
+
+  def categoryToDigit(sess: SparkSession, df: DataFrame, columns: Seq[String], tableName: String): Unit ={}
+
+  def categoryToDigit(sess: SparkSession, df: DataFrame, maxCategory: Int, tableName: String): Unit ={
+    for(x <- df.columns){
+      // 返回该列所有不重复的数．
+      val category = sess.sql(s"select $x from $tableName").distinct()
+      if(category.count() <= maxCategory){
+        val distinctVal = category.distinct().collect().map(_.get(0).toString)
+        val indexedValue = scala.collection.mutable.Map[String, Int]()
+        for(i <- distinctVal.indices)
+          indexedValue += (distinctVal(i) -> i)
+
+        df.select(x).map{row =>
+
+        }
+      }
+    }
+  }
+
 
   // for test
   def main(args: Array[String]): Unit = {
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
+    Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
+
     val path = "/home/cai/Desktop/phone_rank.csv"
     val sess = SparkSession
       .builder().master("local[*]")
@@ -62,15 +91,12 @@ object phoneRankProcess{
       .load("data/test")
 //    val training = phoneRankProcess.readCSVToDF(sess, "data/test", 0, ",").cache()
     training.createOrReplaceTempView("test")
-    val c = "c"
-    val avg = sess.sql(s"select avg($c) from test where $c is not null").first().get(0)
-//    val updatedDf = newDf.withColumn("c", regexp_replace(col("c"), "null", avg.toString))
-    val newDf = training.na.fill(avg.toString, Seq("c"))
-    newDf.show()
+
+    fillColumnsWithAvg(sess, training, Seq("b","c","d"), "test").show()
+    categoryToDigit(sess, training, 5, "test")
   }
 }
 /*
-
 * +---+----+----+----+
 |  l|   b|   c|   d|
 +---+----+----+----+
