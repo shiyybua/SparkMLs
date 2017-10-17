@@ -1,4 +1,3 @@
-import org.apache.spark.mllib.linalg.SparseVector
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DoubleType, StructField, StructType}
@@ -6,7 +5,8 @@ import org.apache.spark.sql.types.{DoubleType, StructField, StructType}
 import scala.collection.mutable.ListBuffer
 import org.apache.spark.ml.linalg.SQLDataTypes.VectorType
 import org.apache.spark.ml.linalg.Vectors
-import org.apache.spark.ml.classification.LogisticRegression
+import org.apache.spark.sql.functions._
+
 
 
 /**
@@ -37,47 +37,46 @@ object phoneRankProcess{
           indices.append(i)
           values.append(value.toDouble)
         }
-
       }
-//      val DataSetFeatures = new SparseVector(featureSize, indices.toArray, values.toArray)
-//      Row(label, DataSetFeatures)
       Row(label, Vectors.sparse(featureSize, indices.toArray, values.toArray))
     }
     val schema = StructType(Array(StructField("label",DoubleType,true), StructField("features",VectorType,true)))
-//    val schema = StructType(schemaString.map(fieldName=>StructField(fieldName,StringType,true)))
     sess.sqlContext.createDataFrame(rows, schema)
+  }
+
+  def fillColumsWithAvg(df: DataFrame ,columns: Seq[String], tableName: String): DataFrame ={
+    df
   }
 
   // for test
   def main(args: Array[String]): Unit = {
+    val path = "/home/cai/Desktop/phone_rank.csv"
     val sess = SparkSession
       .builder().master("local[*]")
       .appName("App")
       .getOrCreate()
-    val training = phoneRankProcess.readCSVToDF(sess, "/home/cai/Desktop/phone_rank.csv", 0, ",").cache()
-    val lr = new LogisticRegression()
-      .setMaxIter(10)
-      .setRegParam(0.3)
-      .setElasticNetParam(0.8)
-
-    // Fit the model
-    val lrModel = lr.fit(training)
-
-    // Print the coefficients and intercept for logistic regression
-    println(s"Coefficients: ${lrModel.coefficientMatrix} Intercept: ${lrModel.interceptVector}")
-
-    // We can also use the multinomial family for binary classification
-    val mlr = new LogisticRegression()
-      .setMaxIter(10)
-      .setRegParam(0.3)
-      .setElasticNetParam(0.8)
-      .setFamily("multinomial")
-
-    val mlrModel = mlr.fit(training)
-
-    // Print the coefficients and intercepts for logistic regression with multinomial family
-    println(s"Multinomial coefficients: ${mlrModel.coefficientMatrix}")
-    println(s"Multinomial intercepts: ${mlrModel.interceptVector}")
-
+    val training = sess.read
+      .format("com.databricks.spark.csv")
+      .option("header", "true") //reading the headers
+      .option("mode", "DROPMALFORMED")
+      .load("data/test")
+//    val training = phoneRankProcess.readCSVToDF(sess, "data/test", 0, ",").cache()
+    training.createOrReplaceTempView("test")
+    val c = "c"
+    val avg = sess.sql(s"select avg($c) from test where $c is not null").first().get(0)
+//    val updatedDf = newDf.withColumn("c", regexp_replace(col("c"), "null", avg.toString))
+    val newDf = training.na.fill(avg.toString, Seq("c"))
+    newDf.show()
   }
 }
+/*
+
+* +---+----+----+----+
+|  l|   b|   c|   d|
++---+----+----+----+
+|  0|   2|null|   3|
+|  1|   7|   5|   1|
+|  0|   1|   2|null|
+|  1|null|null|null|
++---+----+----+----+
+* */
