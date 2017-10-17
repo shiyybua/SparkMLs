@@ -56,7 +56,8 @@ object phoneRankProcess{
 
   def categoryToDigit(sess: SparkSession, df: DataFrame, columns: Seq[String], tableName: String): Unit ={}
 
-  def categoryToDigit(sess: SparkSession, df: DataFrame, maxCategory: Int, tableName: String): Unit ={
+  def categoryToDigit(sess: SparkSession, df: DataFrame, maxCategory: Int, tableName: String): DataFrame ={
+    import sess.implicits._
     for(x <- df.columns){
       // 返回该列所有不重复的数．
       val category = sess.sql(s"select $x from $tableName").distinct()
@@ -65,12 +66,13 @@ object phoneRankProcess{
         val indexedValue = scala.collection.mutable.Map[String, Int]()
         for(i <- distinctVal.indices)
           indexedValue += (distinctVal(i) -> i)
-
         df.select(x).map{row =>
-
+          Row(indexedValue.get(row.getAs[String](0)))
         }
       }
     }
+
+    df
   }
 
 
@@ -93,7 +95,7 @@ object phoneRankProcess{
     training.createOrReplaceTempView("test")
 
     fillColumnsWithAvg(sess, training, Seq("b","c","d"), "test").show()
-    categoryToDigit(sess, training, 5, "test")
+    categoryToDigit(sess, training, 5, "test").show()
   }
 }
 /*
