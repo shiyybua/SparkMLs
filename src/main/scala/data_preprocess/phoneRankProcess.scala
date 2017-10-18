@@ -9,6 +9,8 @@ import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.sql.functions._
 
 
+
+
 /**
   * Created by cai on 10/13/17.
   */
@@ -57,23 +59,39 @@ object phoneRankProcess{
   def categoryToDigit(sess: SparkSession, df: DataFrame, columns: Seq[String], tableName: String): Unit ={}
 
   def categoryToDigit(sess: SparkSession, df: DataFrame, maxCategory: Int, tableName: String): DataFrame ={
-    import sess.implicits._
+    val convertFunc: ((String, Array[String]) => Int)
+      = (column: String, table: Array[String]) => {
+      0
+    }
+    val sqlfunc = udf(convertFunc)
+    var newDF = df
     for(x <- df.columns){
+      println(x)
       // 返回该列所有不重复的数．
       val category = sess.sql(s"select $x from $tableName").distinct()
-      if(category.count() <= maxCategory){
-        val distinctVal = category.distinct().collect().map(_.get(0).toString)
+      var count = 0
+      if(category.count() <= 2){
+        println("do")
+        val distinctVal = category.distinct().collect().filter(_.get(0) != null).map(_.get(0).toString)
         val indexedValue = scala.collection.mutable.Map[String, Int]()
         for(i <- distinctVal.indices)
           indexedValue += (distinctVal(i) -> i)
-        df.select(x).map{row =>
-          Row(indexedValue.get(row.getAs[String](0)))
-        }
+
+        newDF = newDF.withColumn(x, sqlfunc(col(x), lit(Array("99"))))
+//        newDF = newDF.withColumn(x, sqlfunc(col(x), lit(count)))
+        count += 1
+
       }
     }
-
-    df
+    newDF
   }
+
+  def modifyColumn(df: DataFrame): Unit ={
+    val fun:((String,Int,Int) => String) = (args:String, k1:Int, k2:Int) => { "a" }
+    val sqlfunc = udf(fun)
+    df.withColumn("f", sqlfunc(col("e"), lit(1), lit(3))).show()
+  }
+
 
 
   // for test
@@ -86,6 +104,7 @@ object phoneRankProcess{
       .builder().master("local[*]")
       .appName("App")
       .getOrCreate()
+    import sess.implicits._
     val training = sess.read
       .format("com.databricks.spark.csv")
       .option("header", "true") //reading the headers
@@ -94,8 +113,9 @@ object phoneRankProcess{
 //    val training = phoneRankProcess.readCSVToDF(sess, "data/test", 0, ",").cache()
     training.createOrReplaceTempView("test")
 
-    fillColumnsWithAvg(sess, training, Seq("b","c","d"), "test").show()
+//    fillColumnsWithAvg(sess, training, Seq("b","c","d"), "test").show()
     categoryToDigit(sess, training, 5, "test").show()
+//    modifyColumn(training)
   }
 }
 /*
