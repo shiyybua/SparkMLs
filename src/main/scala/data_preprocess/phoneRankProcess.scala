@@ -9,8 +9,6 @@ import org.apache.spark.ml.linalg.Vectors
 import org.apache.spark.sql.functions._
 
 
-
-
 /**
   * Created by cai on 10/13/17.
   */
@@ -58,40 +56,56 @@ object phoneRankProcess{
 
   def categoryToDigit(sess: SparkSession, df: DataFrame, columns: Seq[String], tableName: String): Unit ={}
 
-  def categoryToDigit(sess: SparkSession, df: DataFrame, maxCategory: Int, tableName: String): DataFrame ={
-    val convertFunc: ((String, Array[String]) => Int)
-      = (column: String, table: Array[String]) => {
-      0
-    }
-    val sqlfunc = udf(convertFunc)
+  def categoryToDigit(sess: SparkSession, df: DataFrame, maxCategory: Int, tableName: String):
+        Tuple2[DataFrame, Map[String, scala.collection.mutable.Map[Int, String]]] ={
     var newDF = df
+    var categoryTable = Map[String, scala.collection.mutable.Map[Int, String]]()
+
     for(x <- df.columns){
-      println(x)
       // 返回该列所有不重复的数．
       val category = sess.sql(s"select $x from $tableName").distinct()
-      var count = 0
-      if(category.count() <= 2){
-        println("do")
+      if(category.count() <= maxCategory){
         val distinctVal = category.distinct().collect().filter(_.get(0) != null).map(_.get(0).toString)
         val indexedValue = scala.collection.mutable.Map[String, Int]()
-        for(i <- distinctVal.indices)
+        val reversedIndexedValue = scala.collection.mutable.Map[Int, String]()
+
+        for(i <- distinctVal.indices) {
           indexedValue += (distinctVal(i) -> i)
+          reversedIndexedValue += (i -> distinctVal(i))
+        }
 
-        newDF = newDF.withColumn(x, sqlfunc(col(x), lit(Array("99"))))
-//        newDF = newDF.withColumn(x, sqlfunc(col(x), lit(count)))
-        count += 1
+        val convertFunc: ((String) => Option[Int])
+        = (column: String) => {
+          indexedValue.get(column)
+        }
 
+        val sqlfunc = udf(convertFunc)
+        newDF = newDF.withColumn(x, sqlfunc(col(x)))
+
+        categoryTable += (x -> reversedIndexedValue)
       }
+
     }
-    newDF
+    Tuple2(newDF, categoryTable)
   }
 
   def modifyColumn(df: DataFrame): Unit ={
-    val fun:((String,Int,Int) => String) = (args:String, k1:Int, k2:Int) => { "a" }
+    val v = "csy"
+    val fun:((String,Int,Int) => String) = (args:String, k1:Int, k2:Int) => { v }
     val sqlfunc = udf(fun)
     df.withColumn("f", sqlfunc(col("e"), lit(1), lit(3))).show()
   }
 
+  def showReversedTable(reverseTable: Map[String, scala.collection.mutable.Map[Int, String]]): Unit ={
+    for((columnName, table) <- reverseTable){
+      println(columnName + ":")
+      for((key, value) <- table){
+        println(key + "－＞" + value)
+      }
+      println("*********************************************")
+
+    }
+  }
 
 
   // for test
@@ -114,8 +128,11 @@ object phoneRankProcess{
     training.createOrReplaceTempView("test")
 
 //    fillColumnsWithAvg(sess, training, Seq("b","c","d"), "test").show()
-    categoryToDigit(sess, training, 5, "test").show()
-//    modifyColumn(training)
+    val newDF = categoryToDigit(sess, training, 5, "test")._1
+    val table = categoryToDigit(sess, training, 5, "test")._2
+
+    newDF.show()
+    showReversedTable(table)
   }
 }
 /*
