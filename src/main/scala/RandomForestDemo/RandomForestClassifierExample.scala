@@ -23,17 +23,16 @@ import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification.{RandomForestClassificationModel, RandomForestClassifier}
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorIndexer}
-import org.apache.spark.mllib.tree.RandomForest
+import data_preprocess.DataProcessing
+import org.apache.spark.sql.AnalysisException
 // $example off$
 import org.apache.spark.sql.SparkSession
 import org.apache.log4j.{ Level, Logger }
 
 
 object RandomForestClassifierExample {
-  def main(args: Array[String]): Unit = {
-    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
-    Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
+  def train(processor: DataProcessing): Unit ={
     val spark = SparkSession
       .builder().master("local[*]")
       .appName("App")
@@ -110,6 +109,50 @@ object RandomForestClassifierExample {
     rfModel.treeWeights.foreach(println)
     println(rfModel.trees.apply(0).featureImportances)
     spark.stop()
+  }
+
+  def preprocess(processor: DataProcessing, inputPath: String, outputPath: String, headerPath: String): Unit ={
+    val sess = SparkSession
+      .builder().master("local[*]")
+      .appName("App")
+      .getOrCreate()
+    import sess.implicits._
+    val training = sess.read
+      .format("com.databricks.spark.csv")
+      .option("header", "true") //reading the headers
+      .option("mode", "DROPMALFORMED")
+      .load(inputPath)
+    training.createOrReplaceTempView("test")
+    val newDF = processor.categoryToDigit(sess, training, 100, "test")._1
+    val table = processor.categoryToDigit(sess, training, 100, "test")._2
+
+    processor.showReversedTable(table)
+    try {
+      newDF.write.format("com.databricks.spark.csv").option("header", "true").save(outputPath)
+
+      processor.saveReversedTable(headerPath, table)
+    } catch {
+      case e: AnalysisException => println("file already exists")
+    }
+  }
+
+  def main(args: Array[String]): Unit = {
+    val operation = "train"
+    val inputPath = "data/phone_rank.csv"
+    val outputPath = "data/processed_data"
+    val headerPath = "data/rank_header.txt"
+    val preprocessor = new DataProcessing()
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
+    Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
+
+    if (operation == "train"){
+      train(preprocessor)
+    } else if (operation == "predict"){
+
+    } else if (operation == "preprocess"){
+      preprocess(preprocessor, inputPath, outputPath, headerPath)
+    }
+
   }
 }
 // scalastyle:on println

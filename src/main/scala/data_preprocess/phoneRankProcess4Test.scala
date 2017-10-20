@@ -18,7 +18,7 @@ import org.apache.spark.sql.functions._
   * Created by cai on 10/13/17.
   */
 
-object phoneRankProcess2{
+object phoneRankProcess4Test{
 
   def readCSVToDF(sess: SparkSession, path: String, _labelIndex: Int,
                   spliter: String): DataFrame ={
